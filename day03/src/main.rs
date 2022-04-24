@@ -1,6 +1,8 @@
 use std::collections::{HashMap, HashSet};
 use std::fs;
 
+// Interesting solution: https://github.com/BurntSushi/advent-of-code/blob/master/aoc03/src/main.rs
+
 #[derive(Debug, Eq, Hash, Clone)]
 struct Coord(u32, u32);
 
