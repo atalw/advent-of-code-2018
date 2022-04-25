@@ -10,6 +10,8 @@ extern crate regex;
 
 use regex::Regex;
 
+// Improve coding style from here https://github.com/BurntSushi/advent-of-code/blob/master/aoc04/src/main.rs
+
 fn main() -> Result<(), Box<dyn Error>> {
 	let filename = "input.txt";
 
