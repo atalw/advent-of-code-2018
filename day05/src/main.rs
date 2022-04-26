@@ -11,23 +11,14 @@ fn main() {
 
 	// let polymer = "dabAcCaCBAcCcaDA".to_string();
 	let reacted_polymer = a(polymer);
-	println!("len: {}", reacted_polymer.len());
+	println!("result a: {}", reacted_polymer.len());
 
-	let lowest_len = b(reacted_polymer);
-	println!("lowest len: {}", lowest_len);
+	let lowest_len = b(String::from_iter(reacted_polymer));
+	println!("result b: {}", lowest_len);
 }
 
-fn a(polymer: String) -> String {
-	let mut reacted = polymer;
-	let mut i = 0;
-
-	while i + 1 < reacted.len() {
-		let res = react(reacted, i);
-		reacted = res.0;
-		i = res.1;
-	}
-
-	reacted
+fn a(polymer: String) -> Vec<char> {
+	react(polymer)
 }
 
 fn b(polymer: String) -> usize {
@@ -36,7 +27,6 @@ fn b(polymer: String) -> usize {
 	let mut lowest_len = usize::MAX;
 
 	for letter in letters.chars() {
-		println!("at letter: {}", letter);
 		let p = polymer.replace(letter, "").replace(letter.to_ascii_uppercase(), "");
 		let len = a(p).len();
 		lowest_len = if len < lowest_len { len } else { lowest_len }
@@ -45,27 +35,38 @@ fn b(polymer: String) -> usize {
 	lowest_len
 }
 
-fn react(mut polymer: String, index: usize) -> (String, usize) {
-	let mut left = index;
-	let mut right = index + 1;
+// vec stack is much much faster
+fn react(polymer: String) -> Vec<char> {
+	let chars: Vec<char> = polymer.chars().collect();
 
-	loop {
-		if !is_pair(polymer.clone(), left, right) { break }
-		polymer.remove(right);
-		polymer.remove(left);
-		if left == 0 { break }
-		left -= 1;
-		right -= 1;
+	let mut reacted: Vec<char> = vec![];
+	reacted.push(chars[0]);
+
+	let mut i = 1;
+
+	while i < chars.len() {
+		let stack_top = reacted.last();
+		let c2 = chars[i];
+
+		match stack_top {
+			Some(&c1) => {
+				if is_pair(c1, c2) {
+					reacted.pop();
+				} else {
+					reacted.push(c2);
+				}
+			},
+			None => {
+				reacted.push(c2);
+			}
+		}
+		i += 1;
 	}
 
-	(polymer, right)
+	reacted
 }
 
-fn is_pair(polymer: String, left_index: usize, right_index: usize) -> bool {
-	if let (Some(c1), Some(c2)) = (polymer.chars().nth(left_index), polymer.chars().nth(right_index)) {
-		let opposite = c1.is_uppercase() && c2.is_lowercase() || c1.is_lowercase() && c2.is_uppercase();
-		c1.clone().to_ascii_lowercase() == c2.clone().to_ascii_lowercase() && opposite
-	} else {
-		false
-	}
+fn is_pair(c1: char, c2: char) -> bool {
+	let opposite = c1.is_uppercase() && c2.is_lowercase() || c1.is_lowercase() && c2.is_uppercase();
+	c1.to_ascii_lowercase() == c2.to_ascii_lowercase() && opposite
 }
