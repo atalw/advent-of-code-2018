@@ -3,10 +3,11 @@ use std::fs;
 
 #[derive(Debug, Clone, Copy)]
 // Point(x, y, idx, min_dist)
-struct Point(u32, u32, Index, MinDistance);
+struct Point(u32, u32, Index, MinDistance, TotalDistance);
 
 type Index = Option<usize>;
 type MinDistance = u32;
+type TotalDistance = u32;
 
 fn main() {
 	// let filename = "test.txt";
@@ -25,7 +26,7 @@ fn main() {
 			.split(", ")
 			.map(|x| x.parse::<u32>().unwrap())
 			.collect();
-		points.push(Point(v[0],  v[1], None, MinDistance::MAX));
+		points.push(Point(v[0],  v[1], None, MinDistance::MAX, TotalDistance::MAX));
 	}
 
 	points.sort_by_key(|p| p.1);
@@ -33,7 +34,8 @@ fn main() {
 	println!("{:?}", points);
 
 	let mut grid = build_grid(points.clone());
-	a(points, &mut grid);
+	// a(points, &mut grid);
+	b(points, &mut grid);
 }
 
 fn a(mut points: Vec<Point>, grid: &mut [Vec<Point>]) {
@@ -65,6 +67,32 @@ fn a(mut points: Vec<Point>, grid: &mut [Vec<Point>]) {
 	println!("{}", max_area);
 }
 
+fn b(points: Vec<Point>, grid: &mut [Vec<Point>]) {
+
+	for x in 0..grid.len() {
+		for y in 0..grid[0].len() {
+			let res = find_total_distance(&points, grid[x][y]);
+			grid[x][y].4 = res;
+		}
+	}
+
+	let region: Vec<Point> = grid
+		.iter()
+		.flat_map(|x| x.iter())
+		.filter(|p| p.4 < 10000)
+		.cloned()
+		.collect();
+	println!("region length: {}", region.len());
+}
+
+fn find_total_distance(points: &[Point], coord: Point) -> TotalDistance {
+	let mut sum = 0;
+	for p in points {
+		sum += manhattan_distance(*p, coord);
+	}
+	sum
+}
+
 /// Check in all 4 directions from point if closest extends to boundaries
 fn is_infinite_area(point: Point, grid: &[Vec<Point>]) -> bool {
 	let top_left = grid[0][0];
@@ -72,10 +100,10 @@ fn is_infinite_area(point: Point, grid: &[Vec<Point>]) -> bool {
 	let bottom_left = grid[0][grid[0].len()-1];
 	let _bottom_right = grid[grid.len()-1][grid[0].len()-1];
 
-	let point_north = Point(point.0, top_left.1, None, 0);
-	let point_south = Point(point.0, bottom_left.1, None, 0);
-	let point_east = Point(top_right.0, point.1, None, 0);
-	let point_west = Point(top_left.0, point.1, None, 0);
+	let point_north = Point(point.0, top_left.1, None, 0, 0);
+	let point_south = Point(point.0, bottom_left.1, None, 0, 0);
+	let point_east = Point(top_right.0, point.1, None, 0, 0);
+	let point_west = Point(top_left.0, point.1, None, 0, 0);
 
 	let mut is_infinite = true;
 	for x in point.0..=point_east.0 {
@@ -175,7 +203,7 @@ fn build_grid(points: Vec<Point>) -> Vec<Vec<Point>> {
 	for i in start_x..=end_x {
 		let mut column: Vec<Point> = Vec::new();
 		for j in start_y..=end_y {
-			column.push(Point(i, j, None, MinDistance::MAX));	
+			column.push(Point(i, j, None, MinDistance::MAX, TotalDistance::MAX));	
 		}
 
 		grid.push(column);
