@@ -1,56 +1,82 @@
-use std::{collections::HashMap, num::Wrapping};
-
+use std::collections::{HashMap, VecDeque};
 use lazy_static::lazy_static;
 use regex::Regex;
 
-struct CircleIndex(usize);
-
-fn main() {
-    // let input = "9 players; last marble is worth 25 points";
-    let input_a = "465 players; last marble is worth 71940 points";
-    let input_b = "465 players; last marble is worth 7194000 points";
-    let (player_num, last_point) = parse_input(input_b);
-    let score = play(player_num, last_point);
-    println!("score: {}", score);
+trait Cycle {
+    fn cycle_cw(&mut self, count: usize);
+    fn cycle_ccw(&mut self, count: usize);
 }
 
-fn play(player_num: u32, last_point: u32) -> u32 {
-    let mut circle: Vec<u32> = Vec::new();
-    let mut player_scores: HashMap<usize, u32> = HashMap::new();
-    let mut current_idx = CircleIndex(0);
-    let mut current_player = CircleIndex(0);
+impl<T> Cycle for VecDeque<T> {
+    fn cycle_cw(&mut self, count: usize) {
+        for _ in 0..count {
+            let tmp = self.pop_back().unwrap();
+            self.push_front(tmp);
+        }
+    }
 
-    circle.push(0);
+    fn cycle_ccw(&mut self, count: usize) {
+        for _ in 0..count {
+            let tmp = self.pop_front().unwrap();
+            self.push_back(tmp);
+        }
+    }
+}
+
+fn main() {
+    test();
+    a();
+    b();
+}
+
+fn test() {
+    let input = "9 players; last marble is worth 25 points";
+    let (player_num, last_point) = parse_input(input);
+    let score = play(player_num, last_point);
+    println!("score test: {}", score);
+}
+
+fn a() {
+    let input = "465 players; last marble is worth 71940 points";
+    let (player_num, last_point) = parse_input(input);
+    let score = play(player_num, last_point);
+    println!("score a: {}", score);
+}
+
+fn b() {
+    let input = "465 players; last marble is worth 7194000 points";
+    let (player_num, last_point) = parse_input(input);
+    let score = play(player_num, last_point);
+    println!("score b: {}", score);
+}
+
+fn play(player_num: usize, last_point: u32) -> u32 {
+    let mut circle: VecDeque<u32> = VecDeque::new();
+    let mut player_scores: HashMap<usize, u32> = HashMap::new();
+    let mut current_player = 0;
+
+    circle.push_front(0);
 
     for i in 1..=last_point {
-        let last_index = circle.len();
-        let plus_one;
-
-        if current_idx == circle.len().wrapping_sub(1) {
-            plus_one = CircleIndex(0);
-        } else {
-            plus_one = current_idx.wrapping_add(1, last_index);
-        }
-
         if i % 23 == 0 {
-            current_idx = current_idx.wrapping_sub(7, last_index);
-            let marble = circle.remove(current_idx.0);
-            let score = player_scores.entry(current_player.0).or_insert(0);
+            circle.cycle_ccw(7);
+            let marble = circle.pop_back().unwrap();
+            let score = player_scores.entry(current_player).or_insert(0);
             *score += i + marble;
         } else {
-            current_idx = plus_one.wrapping_add(1, last_index);
-            circle.insert(current_idx.0, i);
+            circle.cycle_cw(2);
+            circle.push_back(i);
         }
 
-        // println!("[{}] {:?}", current_player.0, circle);
+        // println!("[{}] {:?}", current_player, circle);
 
-        current_player = current_player.wrapping_add(1, player_num as usize - 1);
+        current_player = (current_player + 1) % player_num;
     }
 
     *player_scores.iter().max_by_key(|x| x.1).unwrap().1
 }
 
-fn parse_input(input: &str) -> (u32, u32) {
+fn parse_input(input: &str) -> (usize, u32) {
     lazy_static! {
         static ref RE: Regex = Regex::new(
             r"(?P<num>\d+) players; last marble is worth (?P<point>\d+) points").unwrap();
@@ -58,42 +84,10 @@ fn parse_input(input: &str) -> (u32, u32) {
 
     let caps = RE.captures(input).expect("unrecognized input");
 
-    let player_num: u32 = caps["num"].parse().expect("player num parse");
+    let player_num: usize = caps["num"].parse().expect("player num parse");
     let last_point: u32 = caps["point"].parse().expect("last point parse");
 
     (player_num, last_point)
-}
-
-impl CircleIndex {
-    fn wrapping_add(&self, rhs: usize, max: usize) -> Self {
-        let idx = self.0 + rhs;
-        if idx > max {
-            CircleIndex(idx - max - 1)
-        } else {
-            CircleIndex(idx)
-        }
-    }
-
-    fn wrapping_sub(&self, rhs: usize, max: usize) -> Self {
-        let idx = self.0 as i32 - rhs as i32;
-        if idx < 0 {
-            CircleIndex((max as i32 + idx) as usize)
-        } else {
-            CircleIndex(idx as usize)
-        }
-    }
-}
-
-impl PartialEq for CircleIndex {
-    fn eq(&self, other: &Self) -> bool {
-        self.0 == other.0
-    }
-}
-
-impl PartialEq<usize> for CircleIndex {
-    fn eq(&self, other: &usize) -> bool {
-        self.0 == *other
-    }
 }
 
 #[cfg(test)]
