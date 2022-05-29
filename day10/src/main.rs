@@ -56,9 +56,9 @@ impl Stars {
         for y in min_y..=max_y {
             for x in min_x..=max_x {
                 if self.0.iter().any(|p| p == &(x, y)) {
-                    print!("#");
+                    print!("⭐️");
                 } else {
-                    print!(".");
+                    print!("🎄");
                 }
             }
             println!();
