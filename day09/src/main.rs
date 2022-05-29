@@ -2,27 +2,6 @@ use std::collections::{HashMap, VecDeque};
 use lazy_static::lazy_static;
 use regex::Regex;
 
-trait Cycle {
-    fn cycle_cw(&mut self, count: usize);
-    fn cycle_ccw(&mut self, count: usize);
-}
-
-impl<T> Cycle for VecDeque<T> {
-    fn cycle_cw(&mut self, count: usize) {
-        for _ in 0..count {
-            let tmp = self.pop_back().unwrap();
-            self.push_front(tmp);
-        }
-    }
-
-    fn cycle_ccw(&mut self, count: usize) {
-        for _ in 0..count {
-            let tmp = self.pop_front().unwrap();
-            self.push_back(tmp);
-        }
-    }
-}
-
 fn main() {
     test();
     a();
@@ -53,18 +32,21 @@ fn b() {
 fn play(player_num: usize, last_point: u32) -> u32 {
     let mut circle: VecDeque<u32> = VecDeque::new();
     let mut player_scores: HashMap<usize, u32> = HashMap::new();
-    let mut current_player = 0;
 
-    circle.push_front(0);
+    circle.push_back(0);
+    circle.push_back(1);
 
-    for i in 1..=last_point {
+    // player 0 has already played marble 1
+    let mut current_player = 1;
+
+    for i in 2..=last_point {
         if i % 23 == 0 {
-            circle.cycle_ccw(7);
+            circle.rotate_left(7);
             let marble = circle.pop_back().unwrap();
             let score = player_scores.entry(current_player).or_insert(0);
             *score += i + marble;
         } else {
-            circle.cycle_cw(2);
+            circle.rotate_right(2);
             circle.push_back(i);
         }
 
