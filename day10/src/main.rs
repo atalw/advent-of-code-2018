@@ -3,9 +3,10 @@ use std::fs;
 use lazy_static::lazy_static;
 use regex::Regex;
 
+#[derive(Clone)]
 struct Stars(Vec<Point>);
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 struct Point {
     pos_x: i32,
     pos_y: i32,
@@ -19,29 +20,32 @@ fn main() {
     let contents = fs::read_to_string(filename).unwrap();
     let input: Vec<&str> = contents.trim_end().split('\n').collect();
     let stars = Stars(parse_input(input));
-    // println!("{:#?}", points);
     simulate(stars, 100000);
 }
 
 fn simulate(mut stars: Stars, duration: u32) {
     let mut sizes: Vec<(u32, i64)> = Vec::new();
+    let mut stars_copy = stars.clone();
 
     for time in 0..duration {
-        stars.evolve();
-        println!("After {} seconds", time);
-        if time == 10604 {
-            let min_x = stars.0.iter().min_by_key(|x| x.pos_x).unwrap().pos_x;
-            let max_x = stars.0.iter().max_by_key(|x| x.pos_x).unwrap().pos_x;
-            let min_y = stars.0.iter().min_by_key(|x| x.pos_y).unwrap().pos_y;
-            let max_y = stars.0.iter().max_by_key(|x| x.pos_y).unwrap().pos_y;
-            stars.display(min_x, max_x, min_y, max_y);
-            break
-        }
-        sizes.push((time, stars.bounding_box()));
-        println!()
+        stars_copy.evolve();
+        sizes.push((time, stars_copy.bounding_box()));
     }
 
-    println!("min: {:?}", sizes.iter().min_by_key(|x| x.1));
+    let min = sizes.iter().min_by_key(|x| x.1).unwrap();
+
+    for _ in 0..=min.0 {
+        stars.evolve();
+    }
+
+    println!("After {} seconds", min.0 + 1);
+    let min_x = stars.0.iter().min_by_key(|x| x.pos_x).unwrap().pos_x;
+    let max_x = stars.0.iter().max_by_key(|x| x.pos_x).unwrap().pos_x;
+    let min_y = stars.0.iter().min_by_key(|x| x.pos_y).unwrap().pos_y;
+    let max_y = stars.0.iter().max_by_key(|x| x.pos_y).unwrap().pos_y;
+    stars.display(min_x, max_x, min_y, max_y);
+    println!()
+
 }
 
 impl Stars {
@@ -73,8 +77,6 @@ impl Stars {
 
         let x = max_x - min_x;
         let y = max_y - min_y;
-
-        println!("{} {}", x, y);
 
         x as i64 * y as i64
     }
