@@ -117,10 +117,6 @@ impl Grid {
 }
 
 impl Cell {
-    // fn new(x: i32, y: i32, serial_num: i32) -> Self {
-    //     Cell(x, y, power)
-    // }
-
     fn power(&self, serial_num: i32) -> i32 {
         let rack_id = self.0 + 10;
         let mut power: i32 = rack_id as i32 * self.1 as i32;
@@ -131,7 +127,6 @@ impl Cell {
         power
     }
 }
-
 
 
 #[cfg(test)]
