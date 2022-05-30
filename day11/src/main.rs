@@ -21,7 +21,7 @@ fn main() {
 fn a() {
     let serial_num = 7689;
     let grid = Grid::new(serial_num);
-    let cell = grid.find_best_grid(3);
+    let cell = grid.find_best_grid(300);
     println!("{:?}", cell);
 }
 
@@ -30,7 +30,7 @@ fn b() {
     let grid = Grid::new(serial_num);
     let sizes: Vec<_> = (1..=300).collect();
 
-    let max = Arc::new(Mutex::new((Cell(0, 0), 0)));
+    let max = Arc::new(Mutex::new((0, Cell(0, 0), 0)));
     thread::scope(|s| {
         for chunk in sizes.chunks(30) {
             let grid_clone = grid.clone();
@@ -39,15 +39,16 @@ fn b() {
                 for size in chunk {
                     let (cell, power) = grid_clone.find_best_grid(*size);
                     let mut max_lock = max.lock().unwrap();
-                    if max_lock.1 < power {
-                        *max_lock = (cell, power);
+                    if max_lock.2 < power {
+                        *max_lock = (*size, cell, power);
                     }
                 }
+                println!("{:?}", max);
             });
         }
     }).unwrap();
 
-    println!("{:?}", max);
+    println!("actual max: {:?}", max);
 }
 
 impl Grid {
@@ -64,31 +65,23 @@ impl Grid {
 
     fn find_best_grid(&self, size: usize) -> (Cell, i32) {
         // <top-left of nxn grid, total power>
-        let map: Arc<Mutex<HashMap<Cell, i32>>> = Arc::new(Mutex::new(HashMap::new()));
+        let mut map: HashMap<Cell, i32> = HashMap::new();
 
-        thread::scope(|s| {
-            for _ in 0..self.0.chunks(10).count() {
-                s.spawn(|_| {
-                    for y in 0..self.0.len() {
-                        for x in 0..self.0[0].len() {
-                            match self.calc_nxn_power(size, x, y) {
-                                Some(p) => { 
-                                    let mut map_lock = map.lock().unwrap();
-                                    // println!("{},{}: {}", x, y, p);
-                                    map_lock.insert(Cell(x + 1, y + 1), p); 
-                                }
-                                None => continue
-                            }
-
+        for _ in 0..self.0.chunks(10).count() {
+            for y in 0..self.0.len() {
+                for x in 0..self.0[0].len() {
+                    match self.calc_nxn_power(size, x, y) {
+                        Some(p) => { 
+                            map.insert(Cell(x + 1, y + 1), p); 
                         }
+                        None => continue
                     }
-                });
+                }
             }
-        }).unwrap();
+        }
 
-        let map_lock = map.lock().unwrap();
-        let max = map_lock.iter().max_by_key(|x| x.1).map(|(&c, &p)| (c, p)).unwrap();
-        println!("max power: {:?}, size: {}", max.1, size);
+        let max = map.iter().max_by_key(|x| x.1).map(|(&c, &p)| (c, p)).unwrap_or((Cell(0, 0), 0));
+        // println!("max power: {:?}, size: {}", max.1, size);
         max
     }
 
