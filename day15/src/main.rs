@@ -46,7 +46,7 @@ impl Board {
                 };
 
                 let position = Position(x, y, typ); 
-                grid_row.push(position.clone());
+                grid_row.push(position);
                 if let Some(u) = unit { units.insert(position, u); }
             }
             grid.push(grid_row);
@@ -71,18 +71,23 @@ impl Board {
                 None => break
             };
 
-            let (target_pos, target_path) = self.get_nearest_target(targets, pos);
-            if target_pos.in_attack_range(*pos) && with_attack {
-                // println!("attacking you");
-                // println!("{:?}", target_pos);
-                self.attack(*pos, target_pos);
+            if let Some((target_pos, target_path)) = self.get_nearest_target(targets, pos) {
+                if target_pos.in_attack_range(*pos) && with_attack {
+                    println!("attacking you");
+                    // println!("{:?}", target_pos);
+                    self.attack(*pos, target_pos);
+                }
+                else if let Some(path) = target_path {
+                    println!("moving you");
+                    self.move_unit(*pos, path[0]);
+                    if path[0].in_attack_range(target_pos) && with_attack {
+                        self.attack(path[0], target_pos);
+                    }
+                } else {
+                    continue
+                }
             }
-            else if let Some(path) = target_path {
-                // println!("moving you");
-                self.move_unit(*pos, path[0]);
-            } else {
-                continue
-            }
+            break
         }
     }
 
@@ -96,31 +101,44 @@ impl Board {
 
     /// Given a list of opponent positions, find the nearest opponent and return the path (if it
     /// exists)
-    fn get_nearest_target(&self, opp_units: BTreeMap<Position, Unit>, position: &Position) -> (Position, Option<Vec<Position>>) {
+    fn get_nearest_target(&self, opp_units: BTreeMap<Position, Unit>, position: &Position) -> Option<(Position, Option<Vec<Position>>)> {
         let mut all_paths: HashMap<Position, Option<Vec<Position>>> = HashMap::new();
 
         let mut smallest_path_len = usize::MAX;
         for (pos, _) in opp_units.iter() {
+            // TODO: path is None in 2 cases erroneously
+            // 1. Opp unit is adjacent
+            // 2. There is no viable route
             match self.find_shortest_path(*position, *pos) {
                 Some(path) => {
                     if path.len() < smallest_path_len { smallest_path_len = path.len() }
                     all_paths.insert(*pos, Some(path));
                 },
                 None => {
-                    smallest_path_len = 0;
-                    all_paths.insert(*pos, None);
+                    if pos.in_attack_range(*position) {
+                        smallest_path_len = 0;
+                        all_paths.insert(*pos, None);
+                    }
                 }
             }
         }
 
-        // if *position == Position(4, 4, Type::Open) {
-        //     println!("{}", self);
-        //     println!("all paths: {:?}", all_paths);
-        // }
+
+        if *position == Position(3, 2, Type::Open) {
+            // println!("{}", self);
+            println!("pos: {:?}", position);
+            println!("all paths: {:?}", all_paths);
+            println!("smallest_path_len: {}", smallest_path_len);
+        }
 
         // println!("all paths: {:#?}", all_paths);
+        // This means that the unit is in attack range. We want to find the unit with the lowest hp
+        // and return that.
         if smallest_path_len == 0 {
             all_paths.retain(|_, p| p.is_none());
+
+            let target_pos = self.1.iter().filter(|(pos, _)| all_paths.contains_key(pos)).min_by_key(|(_, unit)| unit.hp).unwrap().0;
+            return Some(all_paths.get_key_value(target_pos).map(|(&pos, path)| (pos, path.clone())).unwrap())
         } else {
             all_paths.retain(|_, p| p.is_some() && p.as_ref().unwrap().len() == smallest_path_len);
         }
@@ -128,75 +146,53 @@ impl Board {
         if all_paths.len() == 1 {
             // all_paths.iter().next().unwrap().map(|(&pos, path)| (pos, path.clone()))
             let (&pos, path) = all_paths.iter().next().unwrap();
-            return (pos, path.clone())
+            return Some((pos, path.clone()))
         }
 
-        // let shortest_paths: Vec<(Position, Option<Vec<Position>>)> = all_paths
-        //     .iter()
-        //     .filter(|(_, path)| path.unwrap_or(Vec::new()).len() == smallest_path_len)
-        //     .map(|(&pos, &path)| (pos, path))
-        //     .collect();
+        if let Some((&pos, path)) = all_paths.iter().find(|(_, path)| Some(path.as_ref().unwrap()[0]) == self.top(*position)) {
+            return Some((pos, path.clone()))
+        }
 
-        if smallest_path_len == 0 {
-            if let Some((&pos, path)) = all_paths.iter().find(|(&pos, _)| Some(pos) == self.top(*position)) {
-                return (pos, path.clone())
-            }
+        if let Some((&pos, path)) = all_paths.iter().find(|(_, path)| Some(path.as_ref().unwrap()[0]) == self.left(*position)) {
+            return Some((pos, path.clone()))
+        }
 
-            if let Some((&pos, path)) = all_paths.iter().find(|(&pos, _)| Some(pos) == self.left(*position)) {
-                return (pos, path.clone())
-            }
+        if let Some((&pos, path)) = all_paths.iter().find(|(_, path)| Some(path.as_ref().unwrap()[0]) == self.right(*position)) {
+            return Some((pos, path.clone()))
+        }
 
-            if let Some((&pos, path)) = all_paths.iter().find(|(&pos, _)| Some(pos) == self.right(*position)) {
-                return (pos, path.clone())
-            }
-
-            if let Some((&pos, path)) = all_paths.iter().find(|(&pos, _)| Some(pos) == self.bottom(*position)) {
-                return (pos, path.clone())
-            }
-
-        } else {
-            if let Some((&pos, path)) = all_paths.iter().find(|(_, path)| Some(path.as_ref().unwrap()[0]) == self.top(*position)) {
-                return (pos, path.clone())
-            }
-
-            if let Some((&pos, path)) = all_paths.iter().find(|(_, path)| Some(path.as_ref().unwrap()[0]) == self.left(*position)) {
-                return (pos, path.clone())
-            }
-
-            if let Some((&pos, path)) = all_paths.iter().find(|(_, path)| Some(path.as_ref().unwrap()[0]) == self.right(*position)) {
-                return (pos, path.clone())
-            }
-
-            if let Some((&pos, path)) = all_paths.iter().find(|(_, path)| Some(path.as_ref().unwrap()[0]) == self.bottom(*position)) {
-                return (pos, path.clone())
-            }
+        if let Some((&pos, path)) = all_paths.iter().find(|(_, path)| Some(path.as_ref().unwrap()[0]) == self.bottom(*position)) {
+            return Some((pos, path.clone()))
         }
 
         // Find best path by reading order
 
-        println!("{}", self);
-        println!("{:?}", position);
-        println!("{:?}", all_paths);
+        // println!("{}", self);
+        // println!("{:?}", position);
+        // println!("{:?}", all_paths);
 
-        panic!()
+        None
     }
 
     /// Finds the shortest paths between two positions
     fn find_shortest_path(&self, my_pos: Position, target: Position) -> Option<Vec<Position>> {
         // There can be multiple shortest paths
         let mut paths: Vec<Vec<Position>> = Vec::new();
-        let distance = target.distance(my_pos);
 
-        // println!("start: {:?} {:?}", my_pos, target);
-        self.shortest_path_internal(&mut paths, Vec::new(), my_pos, target, distance);
+        println!("start: {:?} {:?}", my_pos, target);
+        self.shortest_path_internal(&mut paths, Vec::new(), my_pos, target);
 
         paths.retain(|path| self.is_path_reachable(path.to_vec()));
 
         if paths.is_empty() { return None }
 
-        // println!("paths: {:?}", paths);
-
-        // println!("path: {:?}", paths);
+        let mut min_len = usize::MAX;
+        for path in &paths {
+            if path.len() < min_len {
+                min_len = path.len()
+            }
+        }
+        paths.retain(|path| path.len() == min_len);
 
         // Find best path by reading order
         if let Some(path) = paths.iter().find(|path| Some(path[0]) == self.top(my_pos)).cloned() {
@@ -218,22 +214,19 @@ impl Board {
         panic!()
     }
 
-    /// Recursively find all shortest paths
-    fn shortest_path_internal(&self, paths: &mut Vec<Vec<Position>>, curr_path: Vec<Position>, pos: Position, target: Position, dist: u32) -> Option<Vec<Position>> {
-        if dist == 1 { return Some(curr_path) }
-
-        // println!("dist: {}", dist);
+    /// Recursively find all paths
+    fn shortest_path_internal(&self, paths: &mut Vec<Vec<Position>>, curr_path: Vec<Position>, pos: Position, target: Position) -> Option<Vec<Position>> {
+        if target.distance(pos) == 1 { return Some(curr_path) }
 
         if let Some(neighbours) = self.get_possible_moves(pos) {
-            // println!("{:?}", neighbours);
             for n in neighbours {
-                // println!("{:?}", n);
-                // println!("{:?}", target.distance(n));
-                if target.distance(n) < dist {
+                // println!("position: {:?}, neighbour {:?}", pos, n);
+                // TODO: path goes on till infinity. Stopping condition needs to be better
+                if !curr_path.contains(&n) && curr_path.len() < 10 {
                     let mut p = curr_path.clone();
                     p.push(n);
-                    // println!("here {:?}", curr_path);
-                    if let Some(path) = self.shortest_path_internal(paths, p, n, target, dist - 1) {
+                    if let Some(path) = self.shortest_path_internal(paths, p, n, target) {
+                        // println!("{:?}", path);
                         paths.push(path);
                     }
                 }
@@ -331,8 +324,6 @@ impl Unit {
 
 impl Position {
     fn in_attack_range(&self, opp_position: Position) -> bool {
-        let opp_x = opp_position.0;
-        let opp_y = opp_position.1;
         self.distance(opp_position) == 1
     }
 
@@ -427,9 +418,7 @@ mod tests {
 
         println!("{}", board);
         board.round(false);
-        println!("{}", board);
         board.round(false);
-        println!("{}", board);
         board.round(false);
         println!("{}", board);
 
@@ -439,7 +428,27 @@ mod tests {
         assert_eq!(board, final_board);
     }
 
-    fn combat() {
+    #[test]
+    fn combat_one() {
 
+        let filename = "input/test_1.txt";
+        let mut board = Board::new(filename);
+
+        println!("{}", board);
+
+        for _ in 0..47 {
+            board.round(true);
+        }
+
+        println!("{}", board);
+
+        let final_filename = "input/test_1_res.txt";
+        let mut final_board = Board::new(final_filename);
+        final_board.1.entry(Position(1, 1, Type::Open)).and_modify(|e| e.hp = 200);
+        final_board.1.entry(Position(2, 2, Type::Open)).and_modify(|e| e.hp = 131);
+        final_board.1.entry(Position(5, 3, Type::Open)).and_modify(|e| e.hp = 59);
+        final_board.1.entry(Position(5, 5, Type::Open)).and_modify(|e| e.hp = 200);
+
+        assert_eq!(board, final_board);
     }
 }
