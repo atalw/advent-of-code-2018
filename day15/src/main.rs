@@ -1,5 +1,5 @@
 use core::fmt;
-use std::{collections::{BTreeMap, BTreeSet, HashMap}, fs, cmp};
+use std::{collections::{BTreeMap, HashMap}, fs, cmp, mem};
 
 
 const ATTACK: i32 = 3;
@@ -24,6 +24,28 @@ struct Position(usize, usize, Type);
 enum Type {
     Wall,
     Open,
+}
+
+fn main() {
+    let filename = "input/input.txt";
+    a(filename);
+}
+
+fn a(filename: &str) -> u32 {
+    let mut board = Board::new(filename);
+    let mut num_rounds = 0;
+
+    println!("{}", board);
+
+    while board.round(true) {
+        num_rounds += 1;
+    }
+
+    println!("{}", board);
+
+    let hp_sum = board.1.iter().fold(0, |acc, x| acc + x.1.hp as u32);
+
+    num_rounds * hp_sum
 }
 
 impl Board {
@@ -55,20 +77,19 @@ impl Board {
         Board(grid, units)
     }
 
-    fn round(&mut self, with_attack: bool) {
+    fn round(&mut self, with_attack: bool) -> bool {
         // identify all targets
         // if None, end game
         // if Some, find nearest target
         // if target is in range, attack
         // else find all paths to target and select shortest path
         let units = self.1.clone();
-        // let grid = &self.0;
         for (pos, unit) in units.iter() {
             if !self.1.contains_key(pos) { continue }
 
             let targets = match self.get_all_targets(unit) {
                 Some(map) => map,
-                None => break
+                None => return false
             };
 
             if let Some((target_pos, target_path)) = self.get_nearest_target(targets, pos) {
@@ -87,8 +108,8 @@ impl Board {
                     continue
                 }
             }
-            break
         }
+        true
     }
 
     /// Sweep board and return an optional list of opponent positions
@@ -106,9 +127,6 @@ impl Board {
 
         let mut smallest_path_len = usize::MAX;
         for (pos, _) in opp_units.iter() {
-            // TODO: path is None in 2 cases erroneously
-            // 1. Opp unit is adjacent
-            // 2. There is no viable route
             match self.find_shortest_path(*position, *pos) {
                 Some(path) => {
                     if path.len() < smallest_path_len { smallest_path_len = path.len() }
@@ -123,15 +141,6 @@ impl Board {
             }
         }
 
-
-        if *position == Position(3, 2, Type::Open) {
-            // println!("{}", self);
-            println!("pos: {:?}", position);
-            println!("all paths: {:?}", all_paths);
-            println!("smallest_path_len: {}", smallest_path_len);
-        }
-
-        // println!("all paths: {:#?}", all_paths);
         // This means that the unit is in attack range. We want to find the unit with the lowest hp
         // and return that.
         if smallest_path_len == 0 {
@@ -149,6 +158,7 @@ impl Board {
             return Some((pos, path.clone()))
         }
 
+        // Find best path by reading order
         if let Some((&pos, path)) = all_paths.iter().find(|(_, path)| Some(path.as_ref().unwrap()[0]) == self.top(*position)) {
             return Some((pos, path.clone()))
         }
@@ -165,7 +175,6 @@ impl Board {
             return Some((pos, path.clone()))
         }
 
-        // Find best path by reading order
 
         // println!("{}", self);
         // println!("{:?}", position);
@@ -178,21 +187,17 @@ impl Board {
     fn find_shortest_path(&self, my_pos: Position, target: Position) -> Option<Vec<Position>> {
         // There can be multiple shortest paths
         let mut paths: Vec<Vec<Position>> = Vec::new();
+        let mut min_path_len = usize::MAX;
 
-        println!("start: {:?} {:?}", my_pos, target);
-        self.shortest_path_internal(&mut paths, Vec::new(), my_pos, target);
+        // println!("start: {:?} {:?}", my_pos, target);
+        self.shortest_path_internal(&mut paths, Vec::new(), &mut HashMap::new(), my_pos, target, &mut min_path_len);
 
         paths.retain(|path| self.is_path_reachable(path.to_vec()));
 
         if paths.is_empty() { return None }
 
-        let mut min_len = usize::MAX;
-        for path in &paths {
-            if path.len() < min_len {
-                min_len = path.len()
-            }
-        }
-        paths.retain(|path| path.len() == min_len);
+        println!("min path len: {}", min_path_len);
+        paths.retain(|path| path.len() == min_path_len);
 
         // Find best path by reading order
         if let Some(path) = paths.iter().find(|path| Some(path[0]) == self.top(my_pos)).cloned() {
@@ -215,19 +220,39 @@ impl Board {
     }
 
     /// Recursively find all paths
-    fn shortest_path_internal(&self, paths: &mut Vec<Vec<Position>>, curr_path: Vec<Position>, pos: Position, target: Position) -> Option<Vec<Position>> {
-        if target.distance(pos) == 1 { return Some(curr_path) }
+    fn shortest_path_internal(&self, paths: &mut Vec<Vec<Position>>, curr_path: Vec<Position>, visited_nodes: &mut HashMap<Position, Vec<Position>>, pos: Position, target: Position, min_path_len: &mut usize) -> Option<Vec<Position>> {
+        if target.distance(pos) == 1 {
+            for (idx, p) in curr_path.iter().enumerate() {
+                let memo = visited_nodes.entry(*p).or_insert_with(Vec::new);
+                let subpath = curr_path[idx..].to_vec();
+                if memo.len() > subpath.len() || memo.is_empty() {
+                    *memo= curr_path.clone();
+                }
+            }
+            // println!("sub paths: {:?} {:?}", pos, visited_nodes);
+            mem::replace(min_path_len, cmp::min(*min_path_len, curr_path.len()));
+            return Some(curr_path)
+        }
+
+        if curr_path.len() > *min_path_len { return None }
 
         if let Some(neighbours) = self.get_possible_moves(pos) {
             for n in neighbours {
-                // println!("position: {:?}, neighbour {:?}", pos, n);
-                // TODO: path goes on till infinity. Stopping condition needs to be better
-                if !curr_path.contains(&n) && curr_path.len() < 10 {
-                    let mut p = curr_path.clone();
-                    p.push(n);
-                    if let Some(path) = self.shortest_path_internal(paths, p, n, target) {
-                        // println!("{:?}", path);
-                        paths.push(path);
+                if !curr_path.contains(&n) && !self.1.contains_key(&n) && n.2 != Type::Wall {
+                    match visited_nodes.get(&n) {
+                        Some(subpath) if subpath.len() < target.distance(n) as usize => {
+                            let mut p = curr_path.clone();
+                            p.append(&mut subpath.clone());
+                            paths.push(p);
+                        },
+                        _ => {
+                            let mut p = curr_path.clone();
+                            p.push(n);
+                            if let Some(path) = self.shortest_path_internal(paths, p, visited_nodes, n, target, min_path_len) {
+                                // println!("{:?}", path);
+                                paths.push(path);
+                            }
+                        }
                     }
                 }
             }
@@ -334,9 +359,6 @@ impl Position {
 
 }
 
-fn main() {
-    println!("Hello, world!");
-}
 
 impl Ord for Position {
     fn cmp(&self, other: &Position) -> cmp::Ordering {
@@ -403,7 +425,9 @@ mod tests {
         let filename = "input/test_movement_one.txt";
         let mut board = Board::new(filename);
 
+        println!("{}", board);
         board.round(false);
+        println!("{}", board);
 
         let final_filename = "input/test_movement_one_res.txt";
         let final_board = Board::new(final_filename);
@@ -430,7 +454,6 @@ mod tests {
 
     #[test]
     fn combat_one() {
-
         let filename = "input/test_1.txt";
         let mut board = Board::new(filename);
 
@@ -450,5 +473,61 @@ mod tests {
         final_board.1.entry(Position(5, 5, Type::Open)).and_modify(|e| e.hp = 200);
 
         assert_eq!(board, final_board);
+    }
+
+    #[test]
+    fn combat_two() {
+        let filename = "input/test_2.txt";
+        let mut board = Board::new(filename);
+
+        println!("{}", board);
+
+        for _ in 0..=37 {
+            board.round(true);
+        }
+
+        println!("{}", board);
+
+        let final_filename = "input/test_2_res.txt";
+        let mut final_board = Board::new(final_filename);
+        final_board.1.entry(Position(5, 1, Type::Open)).and_modify(|e| e.hp = 200);
+        final_board.1.entry(Position(1, 2, Type::Open)).and_modify(|e| e.hp = 197);
+        final_board.1.entry(Position(2, 3, Type::Open)).and_modify(|e| e.hp = 185);
+        final_board.1.entry(Position(1, 4, Type::Open)).and_modify(|e| e.hp = 200);
+        final_board.1.entry(Position(5, 4, Type::Open)).and_modify(|e| e.hp = 200);
+
+        assert_eq!(board, final_board);
+    }
+
+    #[test]
+    fn combat_three() {
+        let filename = "input/test_3.txt";
+        let res = a(filename);
+        assert_eq!(res, 39514);
+
+    }
+
+    #[test]
+    fn combat_four() {
+        let filename = "input/test_4.txt";
+        let res = a(filename);
+        assert_eq!(res, 27755);
+
+    }
+
+    #[test]
+    fn combat_five() {
+        let filename = "input/test_5.txt";
+        let res = a(filename);
+        assert_eq!(res, 28944);
+
+    }
+
+    #[test]
+    fn combat_six() {
+        let filename = "input/test_6.txt";
+        let res = a(filename);
+        assert_eq!(res, 18740);
+
     }
 }
